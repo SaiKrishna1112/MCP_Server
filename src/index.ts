@@ -1,11 +1,13 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
+
 import { tools } from "./tools.js";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
 
 /**
  * MCP discovery endpoint
