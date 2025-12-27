@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Request, Response } from "express";
 import cors from "cors";
 import { tools } from "./tools.js";
 import { zodToJsonSchema } from "zod-to-json-schema";
@@ -8,49 +8,51 @@ app.use(cors());
 app.use(express.json());
 
 /**
- * 1️⃣ MCP DISCOVERY ENDPOINT
- * ChatGPT Apps calls this automatically
+ * MCP discovery endpoint
  */
-app.get("/.well-known/mcp.json", (_, res) => {
+app.get("/.well-known/mcp.json", (_req: Request, res: Response) => {
   res.json({
     schema_version: "1.0",
     name: "ASKOXY.AI MCP Server",
-    description: "Tools for ASKOXY.AI",
+    description: "MCP tools for ChatGPT Apps",
     tools: Object.entries(tools).map(([name, tool]) => ({
       name,
       description: tool.description,
-      input_schema: zodToJsonSchema(tool.inputSchema)
-    }))
+      input_schema: zodToJsonSchema(tool.inputSchema),
+    })),
   });
 });
 
 /**
- * 2️⃣ MCP TOOL EXECUTION
+ * MCP tool execution
  */
-app.post("/mcp/tool/:toolName", async (req, res) => {
-  const tool = tools[req.params.toolName as keyof typeof tools];
+app.post(
+  "/mcp/tool/:toolName",
+  async (req: Request, res: Response) => {
+    const tool = tools[req.params.toolName];
 
-  if (!tool) {
-    return res.status(404).json({ error: "Tool not found" });
+    if (!tool) {
+      return res.status(404).json({ error: "Tool not found" });
+    }
+
+    const parsed = tool.inputSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error });
+    }
+
+    const result = await tool.handler(parsed.data);
+    res.json(result);
   }
-
-  const parsed = tool.inputSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: parsed.error });
-  }
-
-  const result = await tool.handler(parsed.data);
-  res.json(result);
-});
+);
 
 /**
  * Health check
  */
-app.get("/", (_, res) => {
+app.get("/", (_req: Request, res: Response) => {
   res.send("MCP Server Running");
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT ?? 10000;
 app.listen(PORT, () => {
-  console.error(`MCP server running on ${PORT}`);
+  console.error(`MCP server running on port ${PORT}`);
 });
