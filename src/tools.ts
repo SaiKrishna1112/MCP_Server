@@ -12,12 +12,8 @@ export const tools: Record<string, MCPTool> = {
     inputSchema: z.object({
       name: z.string(),
     }),
-    handler: async ({ name }) => {
-      return {
-        content: [
-          { type: "text", text: `Hello ${name}` },
-        ],
-      };
-    },
+    handler: async ({ name }) => ({
+      content: [{ type: "text", text: `Hello ${name}` }],
+    }),
   },
 };

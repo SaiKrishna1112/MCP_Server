@@ -18,11 +18,10 @@ app.get("/.well-known/mcp.json", (_req: Request, res: Response) => {
     tools: Object.entries(tools).map(([name, tool]) => ({
       name,
       description: tool.description,
-      input_schema: zodToJsonSchema(tool.inputSchema),
+      input_schema: zodToJsonSchema(tool.inputSchema as any),
     })),
   });
 });
-
 /**
  * MCP tool execution
  */
