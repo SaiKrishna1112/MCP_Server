@@ -62,7 +62,7 @@ app.post("/mcp/tool/:toolName", async (req: Request, res: Response) => {
     if (!parsed.success) {
       return res.status(400).json({
         error: "Invalid input",
-        details: parsed.error.errors
+        details: parsed.error.issues
       });
     }
 
