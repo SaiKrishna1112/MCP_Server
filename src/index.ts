@@ -1,35 +1,57 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
-
 import { tools } from "./tools.js";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
-
 /**
- * MCP discovery endpoint
+ * ================================
+ * MCP DISCOVERY ENDPOINT (CRITICAL)
+ * ================================
+ * OpenAI MCP verification ONLY checks this endpoint first.
  */
 app.get("/.well-known/mcp.json", (_req: Request, res: Response) => {
-  res.json({
-    schema_version: "1.0",
-    name: "ASKOXY.AI MCP Server",
-    description: "MCP tools for ChatGPT Apps",
-    tools: Object.entries(tools).map(([name, tool]) => ({
+  const mcpTools = Object.entries(tools).map(([name, tool]) => {
+    // Convert Zod → JSON Schema
+    const rawSchema: any = zodToJsonSchema(tool.inputSchema as any);
+
+    // 🔴 MCP STRICT SANITIZATION (NON-NEGOTIABLE)
+    delete rawSchema.$schema;
+    delete rawSchema.definitions;
+    delete rawSchema.additionalProperties;
+
+    return {
       name,
       description: tool.description,
-      input_schema: zodToJsonSchema(tool.inputSchema as any),
-    })),
+      input_schema: {
+        type: "object",
+        properties: rawSchema.properties ?? {},
+        required: rawSchema.required ?? []
+      }
+    };
+  });
+
+  res.status(200).json({
+    schema_version: "1.0",
+    name: "ASKOXY.AI MCP Server",
+    version: "1.0.0",
+    description: "MCP tools for ChatGPT Apps",
+    tools: mcpTools
   });
 });
+
 /**
- * MCP tool execution
+ * =========================
+ * MCP TOOL EXECUTION ROUTE
+ * =========================
+ * OpenAI will call this AFTER discovery succeeds
  */
-app.post(
-  "/mcp/tool/:toolName",
-  async (req: Request, res: Response) => {
+app.post("/mcp/tool/:toolName", async (req: Request, res: Response) => {
+  try {
     const tool = tools[req.params.toolName];
 
     if (!tool) {
@@ -38,22 +60,39 @@ app.post(
 
     const parsed = tool.inputSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ error: parsed.error });
+      return res.status(400).json({
+        error: "Invalid input",
+        details: parsed.error.errors
+      });
     }
 
     const result = await tool.handler(parsed.data);
-    res.json(result);
+    res.status(200).json(result);
+  } catch (err: any) {
+    console.error("Tool execution error:", err);
+    res.status(500).json({
+      error: "Tool execution failed",
+      message: err?.message ?? "Unknown error"
+    });
   }
-);
-
-/**
- * Health check
- */
-app.get("/", (_req: Request, res: Response) => {
-  res.send("MCP Server Running");
 });
 
-const PORT = process.env.PORT ?? 10000;
+/**
+ * ============
+ * HEALTH CHECK
+ * ============
+ */
+app.get("/", (_req: Request, res: Response) => {
+  res.status(200).send("ASKOXY MCP Server Running");
+});
+
+/**
+ * =================
+ * SERVER STARTUP
+ * =================
+ */
+const PORT = Number(process.env.PORT) || 10000;
+
 app.listen(PORT, () => {
-  console.error(`MCP server running on port ${PORT}`);
+  console.log(`✅ MCP Server running on port ${PORT}`);
 });
