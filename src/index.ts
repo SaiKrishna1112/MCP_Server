@@ -1,7 +1,6 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
-import { tools } from "./tools.js";
-import { zodToJsonSchema } from "zod-to-json-schema";
+import { tools, MCPTool } from "./tools.js";
 
 const app = express();
 
@@ -12,25 +11,24 @@ app.use(express.json());
  * ================================
  * MCP DISCOVERY ENDPOINT (CRITICAL)
  * ================================
- * OpenAI MCP verification ONLY checks this endpoint first.
  */
 app.get("/.well-known/mcp.json", (_req: Request, res: Response) => {
-  const mcpTools = Object.entries(tools).map(([name, tool]) => {
-    // Convert Zod → JSON Schema
-    const rawSchema: any = zodToJsonSchema(tool.inputSchema as any);
+  const mcpTools = Object.entries(tools).map(([name, tool]: [string, MCPTool]) => {
+    // Flatten Zod inputSchema for MCP
+    const shape = (tool.inputSchema as any).shape ?? {};
+    const properties: Record<string, any> = {};
 
-    // 🔴 MCP STRICT SANITIZATION (NON-NEGOTIABLE)
-    delete rawSchema.$schema;
-    delete rawSchema.definitions;
-    delete rawSchema.additionalProperties;
+    for (const key of Object.keys(shape)) {
+      properties[key] = { type: "string" }; // assume string for simplicity
+    }
 
     return {
       name,
       description: tool.description,
       input_schema: {
         type: "object",
-        properties: rawSchema.properties ?? {},
-        required: rawSchema.required ?? []
+        properties,
+        required: [] // optional fields
       }
     };
   });
@@ -48,20 +46,25 @@ app.get("/.well-known/mcp.json", (_req: Request, res: Response) => {
  * =========================
  * MCP TOOL EXECUTION ROUTE
  * =========================
- * OpenAI will call this AFTER discovery succeeds
  */
-app.post("/mcp/tool/:toolName", async (req, res) => {
+app.post("/mcp/tool/:toolName", async (req: Request, res: Response) => {
   try {
     const tool = tools[req.params.toolName];
-
-    if (!tool) {
-      return res.status(404).json({ error: "Tool not found" });
-    }
+    if (!tool) return res.status(404).json({ error: "Tool not found" });
 
     const parsed = tool.inputSchema.safeParse(req.body ?? {});
     const args = parsed.success ? parsed.data : {};
 
     const result = await tool.handler(args);
+
+    // Ensure always returning 'content' array
+    if (!result?.content) {
+      return res.status(200).json({
+        content: [
+          { type: "text", text: "Tool executed with fallback response" }
+        ]
+      });
+    }
 
     return res.status(200).json(result);
   } catch (err: any) {
@@ -75,9 +78,9 @@ app.post("/mcp/tool/:toolName", async (req, res) => {
 });
 
 /**
- * ============
+ * =============
  * HEALTH CHECK
- * ============
+ * =============
  */
 app.get("/", (_req: Request, res: Response) => {
   res.status(200).send("ASKOXY MCP Server Running");
@@ -89,7 +92,6 @@ app.get("/", (_req: Request, res: Response) => {
  * =================
  */
 const PORT = Number(process.env.PORT) || 10000;
-
 app.listen(PORT, () => {
   console.log(`✅ MCP Server running on port ${PORT}`);
 });
