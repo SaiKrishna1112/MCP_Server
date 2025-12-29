@@ -67,6 +67,25 @@ app.post("/mcp/tool/:toolName", async (req, res) => {
         });
     }
 });
+app.get("/mcp", (_req, res) => {
+    res.status(200).json({
+        name: "askoxy-mcp",
+        version: "1.0.4",
+        description: "MCP tools for ChatGPT Apps",
+        tools: [
+            {
+                name: "say_hello",
+                description: "Say hello to a user",
+                input_schema: {
+                    type: "object",
+                    properties: {
+                        name: { type: "string" }
+                    }
+                }
+            }
+        ]
+    });
+});
 /**
  * =================
  * HEALTH CHECK
