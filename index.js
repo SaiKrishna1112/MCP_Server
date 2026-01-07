@@ -32,6 +32,6 @@ app.post("/messages", express.json(), async (req, res) => {
   }
 });
 
-app.listen(3000, () => {
+app.listen(10000, () => {
   console.log("MCP SSE Server running on port 3000");
 });
