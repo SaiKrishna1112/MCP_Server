@@ -114,5 +114,8 @@ app.get("/", (_req: Request, res: Response) => {
  * SERVER STARTUP
  * =================
  */
-const PORT = Number(process.env.PORT) || 10000;
-app.listen(PORT);
+const PORT = Number(process.env.PORT || 10000);
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
+});
